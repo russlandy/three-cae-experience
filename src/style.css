@@ -107,6 +107,35 @@ button.active {
   border-color: #4a73a3;
 }
 
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.field select {
+  margin-left: auto;
+}
+
+input[type='file'] {
+  max-width: 100%;
+  margin-bottom: 4px;
+}
+
+/* Подсветка сцены, когда над ней тащат файл */
+#viewport.drop-target::after {
+  content: 'Отпустите файл: STL / glTF';
+  position: absolute;
+  inset: 8px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed #4a73a3;
+  border-radius: 8px;
+  background: rgb(58 90 128 / 0.2);
+  pointer-events: none;
+}
+
 .readout {
   white-space: pre-line;
   font-variant-numeric: tabular-nums;

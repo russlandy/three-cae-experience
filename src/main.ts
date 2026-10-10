@@ -4,8 +4,11 @@ import { Viewer } from './core/viewer';
 import { createReference } from './core/reference';
 import type { Projection, ViewName } from './core/cameras';
 import { Navigation, type ZoomMode } from './core/controls';
+import { addLights } from './core/lights';
+import { ModelSlot } from './core/model';
+import { parseModel, type ImportOptions, type LengthUnit } from './data/loaders';
 import { Overlay } from './ui/overlay';
-import { buttonRow, readout, section, toggleGroup } from './ui/panel';
+import { buttonRow, checkbox, readout, section, selectBox, toggleGroup } from './ui/panel';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
 const viewport = document.querySelector<HTMLElement>('#viewport')!;
@@ -14,23 +17,16 @@ const panel = document.querySelector<HTMLElement>('#panel')!;
 const viewer = new Viewer(canvas);
 const { rig } = viewer;
 viewer.scene.add(createReference());
-
-// Временный куб 100 мм, стоит на полу (центр на высоте 50 мм)
-const cube = new THREE.Mesh(
-  new THREE.BoxGeometry(100, 100, 100),
-  new THREE.MeshNormalMaterial(),
-);
-cube.position.y = 50;
-viewer.scene.add(cube);
+addLights(viewer);
 
 const overlay = new Overlay(viewport, canvas);
 viewer.onRender(() => overlay.update(viewer.camera, viewer.target));
 
 const nav = new Navigation(viewer, canvas);
+const model = new ModelSlot(viewer.scene);
 
-// --- Камера ---
 const fit = () => {
-  rig.fit(new THREE.Box3().setFromObject(cube));
+  rig.fit(model.box());
   viewer.requestRender();
 };
 const setView = (view: ViewName) => {
@@ -38,6 +34,73 @@ const setView = (view: ViewName) => {
   viewer.requestRender();
 };
 
+// --- Деталь ---
+const modelSection = section(panel, 'Деталь');
+const fileInput = document.createElement('input');
+fileInput.type = 'file';
+fileInput.accept = '.stl,.glb,.gltf';
+modelSection.append(fileInput);
+
+const UNITS: Array<{ value: LengthUnit; label: string }> = [
+  { value: 'mm', label: 'мм' },
+  { value: 'cm', label: 'см' },
+  { value: 'm', label: 'м' },
+  { value: 'in', label: 'дюймы' },
+];
+const setUnitControl = selectBox<LengthUnit>(modelSection, 'Единицы файла', UNITS, 'mm', (unit) =>
+  applyOptions({ ...model.options, unit }),
+);
+const setZUpControl = checkbox(modelSection, 'Z вверх (CAD)', false, (zUp) =>
+  applyOptions({ ...model.options, zUp }),
+);
+const modelInfo = readout(modelSection);
+
+const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+function showModelInfo() {
+  const { size, triangles, vertices } = model.info;
+  modelInfo.textContent =
+    `${model.name}\n` +
+    `${fmt(size.x)} × ${fmt(size.y)} × ${fmt(size.z)} мм\n` +
+    `треугольников ${fmt(triangles)} · вершин ${fmt(vertices)}`;
+}
+
+function applyOptions(options: ImportOptions) {
+  model.apply(options);
+  showModelInfo();
+  fit();
+}
+
+async function loadFile(file: File) {
+  try {
+    const parsed = await parseModel(file.name, await file.arrayBuffer());
+    model.set(file.name, parsed.source, parsed.defaults);
+    setUnitControl(parsed.defaults.unit);
+    setZUpControl(parsed.defaults.zUp);
+    showModelInfo();
+    fit();
+  } catch (err) {
+    modelInfo.textContent = `Ошибка: ${(err as Error).message}`;
+  }
+}
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files?.[0]) loadFile(fileInput.files[0]);
+});
+
+// Перетаскивание файла на сцену
+viewport.addEventListener('dragover', (e) => {
+  e.preventDefault(); // без этого браузер не разрешит drop и просто откроет файл
+  viewport.classList.add('drop-target');
+});
+viewport.addEventListener('dragleave', () => viewport.classList.remove('drop-target'));
+viewport.addEventListener('drop', (e) => {
+  e.preventDefault();
+  viewport.classList.remove('drop-target');
+  const file = e.dataTransfer?.files[0];
+  if (file) loadFile(file);
+});
+
+// --- Камера ---
 const cameraSection = section(panel, 'Камера');
 const selectProjection = toggleGroup<Projection>(
   cameraSection,
@@ -88,9 +151,15 @@ viewer.onRender(() => {
   stats.textContent =
     `three r${THREE.REVISION}\n` +
     `кадров отрисовано: ${viewer.renderCount}\n` +
-    `near / far: ${cam.near.toFixed(1)} / ${cam.far.toFixed(0)} мм`;
+    `near / far: ${cam.near.toFixed(1)} / ${fmt(cam.far)} мм`;
 });
 
-// Старт: изометрия и fit по детали
+// --- Старт: синтетическая пластина 400 × 12 × 120 мм (уже в мм и Y вверх), лежит на полу ---
+const plate = new THREE.Mesh(
+  new THREE.BoxGeometry(400, 12, 120).translate(0, 6, 0),
+  new THREE.MeshStandardMaterial({ color: 0x9aa4ae, roughness: 0.7, metalness: 0.1 }),
+);
+model.set('Пластина (демо)', plate, { unit: 'mm', zUp: false });
+showModelInfo();
 rig.setView('iso');
 fit();

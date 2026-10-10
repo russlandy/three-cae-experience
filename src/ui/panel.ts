@@ -62,3 +62,41 @@ export function readout(parent: HTMLElement): HTMLElement {
   parent.append(el);
   return el;
 }
+
+/** Выпадающий список. Возвращает функцию «выставить значение» без вызова onChange */
+export function selectBox<T extends string>(
+  parent: HTMLElement,
+  label: string,
+  options: Array<{ value: T; label: string }>,
+  initial: T,
+  onChange: (value: T) => void,
+): (value: T) => void {
+  const wrap = document.createElement('label');
+  wrap.className = 'field';
+  wrap.append(label);
+  const select = document.createElement('select');
+  for (const { value, label: text } of options) select.add(new Option(text, value));
+  select.value = initial;
+  select.addEventListener('change', () => onChange(select.value as T));
+  wrap.append(select);
+  parent.append(wrap);
+  return (value) => (select.value = value);
+}
+
+/** Галочка. Возвращает функцию «выставить значение» без вызова onChange */
+export function checkbox(
+  parent: HTMLElement,
+  label: string,
+  initial: boolean,
+  onChange: (checked: boolean) => void,
+): (checked: boolean) => void {
+  const wrap = document.createElement('label');
+  wrap.className = 'field';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = initial;
+  input.addEventListener('change', () => onChange(input.checked));
+  wrap.append(input, label);
+  parent.append(wrap);
+  return (checked) => (input.checked = checked);
+}
