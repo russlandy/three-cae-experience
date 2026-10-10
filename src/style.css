@@ -1,0 +1,40 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #1a1d21;
+  color: #d8dde3;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+/* Сцена слева, панель управления справа фиксированной ширины */
+#app {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  height: 100vh;
+}
+
+/* Размер канваса задаёт CSS; внутреннее разрешение задаёт рендерер (setSize(w, h, false)) */
+#scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+#panel {
+  border-left: 1px solid #2c3138;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+/* Заглушки до своих шагов: stats — шаг 10, legend — шаг 7, chart — шаг 9 */
+#stats,
+#legend,
+#chart {
+  display: none;
+}
