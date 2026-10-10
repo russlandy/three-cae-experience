@@ -19,6 +19,7 @@ export class Viewer {
   private canvas: HTMLCanvasElement;
   private renderRequested = false;
   private renderListeners: Array<() => void> = [];
+  private beforeRenderListeners: Array<() => void> = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -53,8 +54,18 @@ export class Viewer {
     this.renderListeners.push(listener);
   }
 
+  /**
+   * Подписка на «сейчас будет кадр»: анимации без внешних событий (инерция орбиты).
+   * Если слушатель здесь снова вызовет requestRender(), будет запланирован следующий кадр.
+   */
+  onBeforeRender(listener: () => void) {
+    this.beforeRenderListeners.push(listener);
+  }
+
   private render = () => {
+    // Флаг сбрасывается ДО слушателей: запрос из onBeforeRender должен запланировать новый кадр
     this.renderRequested = false;
+    for (const listener of this.beforeRenderListeners) listener();
     this.renderer.render(this.scene, this.camera);
     this.renderCount++;
     for (const listener of this.renderListeners) listener();

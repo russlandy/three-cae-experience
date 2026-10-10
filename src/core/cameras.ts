@@ -112,6 +112,10 @@ export class CameraRig {
   }
 
   /** Высота кадра орто-камеры в мм */
+  get orthoHeight() {
+    return this.frustumHeight;
+  }
+
   setOrthoHeight(mm: number) {
     this.frustumHeight = mm;
     this.updateOrthoFrustum();

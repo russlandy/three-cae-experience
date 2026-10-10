@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Viewer } from './core/viewer';
 import { createReference } from './core/reference';
 import type { Projection, ViewName } from './core/cameras';
+import { Navigation, type ZoomMode } from './core/controls';
 import { Overlay } from './ui/overlay';
 import { buttonRow, readout, section, toggleGroup } from './ui/panel';
 
@@ -25,6 +26,8 @@ viewer.scene.add(cube);
 const overlay = new Overlay(viewport, canvas);
 viewer.onRender(() => overlay.update(viewer.camera, viewer.target));
 
+const nav = new Navigation(viewer, canvas);
+
 // --- Камера ---
 const fit = () => {
   rig.fit(new THREE.Box3().setFromObject(cube));
@@ -45,8 +48,17 @@ const selectProjection = toggleGroup<Projection>(
   'ortho',
   (p) => {
     rig.setProjection(p);
-    viewer.requestRender();
+    nav.syncCamera();
   },
+);
+toggleGroup<ZoomMode>(
+  cameraSection,
+  [
+    { value: 'cursor', label: 'Зум к курсору' },
+    { value: 'center', label: 'Зум к центру' },
+  ],
+  nav.zoomMode,
+  (m) => (nav.zoomMode = m),
 );
 buttonRow(cameraSection, [
   { label: 'Сверху', title: 'Клавиша 1', onClick: () => setView('top') },
@@ -65,7 +77,7 @@ window.addEventListener('keydown', (e) => {
     const next = rig.active === rig.ortho ? 'perspective' : 'ortho';
     rig.setProjection(next);
     selectProjection(next);
-    viewer.requestRender();
+    nav.syncCamera();
   }
 });
 

@@ -9,8 +9,8 @@
 | 1. Рендерер, сцена, рендер по требованию | [steps/01-viewer-render-on-demand.md](steps/01-viewer-render-on-demand.md) | готово |
 | 2. Мир в миллиметрах | [steps/02-world-mm.md](steps/02-world-mm.md) | готово |
 | 3. Камеры, виды, fit-to-object | [steps/03-cameras.md](steps/03-cameras.md) | готово |
-| 4. Орбита, зум к курсору | — | дальше |
-| 5. Загрузка STL / glTF | — | |
+| 4. Орбита, зум к курсору | [steps/04-navigation.md](steps/04-navigation.md) | готово |
+| 5. Загрузка STL / glTF | — | дальше |
 | 6. Picking лучом | — | |
 | 7. Поле температур | — | |
 | 8. Срез | — | |
