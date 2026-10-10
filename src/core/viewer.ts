@@ -11,14 +11,15 @@ export class Viewer {
   readonly scene = new THREE.Scene();
   // Временная камера: настоящие орто/перспектива появятся на шаге 3 (core/cameras.ts)
   camera: THREE.PerspectiveCamera;
+  /** Точка интереса: куда смотрит камера. Шаг 4 отдаст её во владение контролам орбиты */
+  readonly target = new THREE.Vector3(0, 0, 0);
 
   /** Сколько кадров реально отрисовано с момента старта — для проверки, что в покое 0 */
   renderCount = 0;
-  /** Вызывается после каждой отрисовки (панель счётчиков) */
-  onRender?: () => void;
 
   private canvas: HTMLCanvasElement;
   private renderRequested = false;
+  private renderListeners: Array<() => void> = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -27,8 +28,8 @@ export class Viewer {
     this.scene.background = new THREE.Color(0x1a1d21);
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 1, 10_000);
-    this.camera.position.set(200, 150, 250);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.set(500, 400, 650);
+    this.camera.lookAt(this.target);
 
     // Следим за размером самого канваса, а не окна: колонка grid может
     // измениться без события window.resize (например, при сворачивании панели).
@@ -42,11 +43,16 @@ export class Viewer {
     requestAnimationFrame(this.render);
   }
 
+  /** Подписка на «кадр отрисован»: HTML-слои, которые зависят от камеры, и счётчики */
+  onRender(listener: () => void) {
+    this.renderListeners.push(listener);
+  }
+
   private render = () => {
     this.renderRequested = false;
     this.renderer.render(this.scene, this.camera);
     this.renderCount++;
-    this.onRender?.();
+    for (const listener of this.renderListeners) listener();
   };
 
   private resize() {

@@ -18,12 +18,47 @@ body {
   height: 100vh;
 }
 
+/* Контейнер сцены: относительно него позиционируются HTML-слои (подписи осей, линейка) */
+#viewport {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
 /* Размер канваса задаёт CSS; внутреннее разрешение задаёт рендерер (setSize(w, h, false)) */
 #scene {
   display: block;
   width: 100%;
   height: 100%;
-  min-width: 0;
+}
+
+/* Подпись оси: левый верхний угол в (0,0), сдвиг в точку экрана через transform.
+   transform не вызывает перерасчёт раскладки страницы, в отличие от left/top */
+.axis-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-weight: 600;
+  pointer-events: none;
+  margin: -8px 0 0 4px;
+}
+
+.scale-bar {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  pointer-events: none;
+}
+
+.scale-bar__line {
+  height: 6px;
+  border: 2px solid #d8dde3;
+  border-top: none;
+}
+
+.scale-bar__text {
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }
 
 #panel {
