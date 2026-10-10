@@ -8,8 +8,8 @@
 | 0. Каркас проекта | [steps/00-skeleton.md](steps/00-skeleton.md) | готово |
 | 1. Рендерер, сцена, рендер по требованию | [steps/01-viewer-render-on-demand.md](steps/01-viewer-render-on-demand.md) | готово |
 | 2. Мир в миллиметрах | [steps/02-world-mm.md](steps/02-world-mm.md) | готово |
-| 3. Камеры, виды, fit-to-object | — | дальше |
-| 4. Орбита, зум к курсору | — | |
+| 3. Камеры, виды, fit-to-object | [steps/03-cameras.md](steps/03-cameras.md) | готово |
+| 4. Орбита, зум к курсору | — | дальше |
 | 5. Загрузка STL / glTF | — | |
 | 6. Picking лучом | — | |
 | 7. Поле температур | — | |

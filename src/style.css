@@ -67,6 +67,52 @@ body {
   overflow-y: auto;
 }
 
+.panel-section + .panel-section {
+  margin-top: 16px;
+}
+
+.panel-section h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a939e;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+button,
+select {
+  font: inherit;
+  color: inherit;
+  background: #262b31;
+  border: 1px solid #353b43;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #2f353c;
+}
+
+button.active {
+  background: #3a5a80;
+  border-color: #4a73a3;
+}
+
+.readout {
+  white-space: pre-line;
+  font-variant-numeric: tabular-nums;
+  color: #b7bec7;
+}
+
 /* Заглушки до своих шагов: stats — шаг 10, legend — шаг 7, chart — шаг 9 */
 #stats,
 #legend,

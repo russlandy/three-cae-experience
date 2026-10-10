@@ -5,10 +5,14 @@ import * as THREE from 'three';
  * на расстоянии точки интереса `target`.
  */
 export function mmPerPixel(
-  camera: THREE.PerspectiveCamera,
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
   target: THREE.Vector3,
   viewportHeightPx: number,
 ): number {
+  if (camera instanceof THREE.OrthographicCamera) {
+    // У орто высота кадра одинакова на любой глубине — точка интереса не нужна
+    return (camera.top - camera.bottom) / camera.zoom / viewportHeightPx;
+  }
   // Видимая высота на расстоянии d: 2 · d · tan(fov / 2)
   const d = camera.position.distanceTo(target);
   const visibleHeight = 2 * d * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);

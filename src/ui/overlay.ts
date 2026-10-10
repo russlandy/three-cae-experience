@@ -40,7 +40,7 @@ export class Overlay {
     root.append(scale);
   }
 
-  update(camera: THREE.PerspectiveCamera, target: THREE.Vector3) {
+  update(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, target: THREE.Vector3) {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
 

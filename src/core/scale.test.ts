@@ -8,6 +8,12 @@ describe('mmPerPixel', () => {
     camera.position.set(0, 0, 500);
     expect(mmPerPixel(camera, new THREE.Vector3(0, 0, 0), 1000)).toBeCloseTo(1, 6);
   });
+
+  test('орто: высота кадра 500 мм на 500 px → 1 мм/px, от расстояния не зависит', () => {
+    const camera = new THREE.OrthographicCamera(-250, 250, 250, -250, 1, 10_000);
+    camera.position.set(0, 0, 3000);
+    expect(mmPerPixel(camera, new THREE.Vector3(0, 0, 0), 500)).toBeCloseTo(1, 6);
+  });
 });
 
 describe('niceScaleBar', () => {
