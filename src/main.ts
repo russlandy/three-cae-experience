@@ -8,9 +8,12 @@ import { addLights } from './core/lights';
 import { ModelSlot } from './core/model';
 import { measurePickMs, pick, pixelToNdc } from './core/picking';
 import { Selection } from './core/selection';
+import { FieldView, type RangeMode } from './core/field-view';
 import { parseModel, type ImportOptions, type LengthUnit } from './data/loaders';
+import type { PaletteName } from './data/palette';
+import { Legend } from './ui/legend';
 import { Overlay } from './ui/overlay';
-import { buttonRow, checkbox, readout, section, selectBox, toggleGroup } from './ui/panel';
+import { buttonRow, checkbox, readout, section, selectBox, slider, toggleGroup } from './ui/panel';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
 const viewport = document.querySelector<HTMLElement>('#viewport')!;
@@ -26,6 +29,9 @@ viewer.onRender(() => overlay.update(viewer.camera, viewer.target));
 
 const nav = new Navigation(viewer, canvas);
 const model = new ModelSlot(viewer.scene);
+const field = new FieldView(viewer);
+const legend = new Legend(viewport);
+viewer.onRender(() => legend.update(field.palette, field.range, field.enabled));
 
 const fit = () => {
   rig.fit(model.box());
@@ -66,22 +72,26 @@ function showModelInfo() {
     `треугольников ${fmt(triangles)} · вершин ${fmt(vertices)}`;
 }
 
-function applyOptions(options: ImportOptions) {
-  model.apply(options);
+/** Деталь сменилась (загрузка или смена единиц): сбросить выбор, пересчитать поле, вписать */
+function onModelChanged() {
   clearPick();
   showModelInfo();
+  field.attach(model.world);
   fit();
+}
+
+function applyOptions(options: ImportOptions) {
+  model.apply(options);
+  onModelChanged();
 }
 
 async function loadFile(file: File) {
   try {
     const parsed = await parseModel(file.name, await file.arrayBuffer());
     model.set(file.name, parsed.source, parsed.defaults);
-    clearPick();
     setUnitControl(parsed.defaults.unit);
     setZUpControl(parsed.defaults.zUp);
-    showModelInfo();
-    fit();
+    onModelChanged();
   } catch (err) {
     modelInfo.textContent = `Ошибка: ${(err as Error).message}`;
   }
@@ -103,6 +113,50 @@ viewport.addEventListener('drop', (e) => {
   const file = e.dataTransfer?.files[0];
   if (file) loadFile(file);
 });
+
+// --- Поле температур ---
+const fieldSection = section(panel, 'Поле температур');
+checkbox(fieldSection, 'Показывать поле', field.enabled, (on) => field.setEnabled(on));
+slider(
+  fieldSection,
+  'шаг',
+  { min: 0, max: field.stepCount - 1, step: 1, value: 0 },
+  (v) => `${v} / ${field.stepCount - 1}`,
+  (v) => field.setStep(v),
+);
+toggleGroup<PaletteName>(
+  fieldSection,
+  [
+    { value: 'viridis', label: 'Viridis' },
+    { value: 'jet', label: 'Радуга (jet)' },
+  ],
+  field.palette,
+  (p) => field.setPalette(p),
+);
+toggleGroup<RangeMode>(
+  fieldSection,
+  [
+    { value: 'fixed', label: 'Диапазон: фикс.' },
+    { value: 'auto', label: 'Авто (min–max)' },
+  ],
+  field.rangeMode,
+  (m) => field.setRangeMode(m),
+);
+selectBox(
+  fieldSection,
+  'Изотермы',
+  [
+    { value: '0', label: 'выкл' },
+    { value: '50', label: 'каждые 50 °C' },
+    { value: '100', label: 'каждые 100 °C' },
+    { value: '250', label: 'каждые 250 °C' },
+  ],
+  '0',
+  (v) => field.setIsoStep(+v),
+);
+slider(fieldSection, 'затенение', { min: 0, max: 1, step: 0.05, value: 0.25 }, (v) => v.toFixed(2), (v) =>
+  field.setShade(v),
+);
 
 // --- Камера ---
 const cameraSection = section(panel, 'Камера');
@@ -174,6 +228,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (!hit) return clearPick();
 
   selection.show(hit);
+  const temperature = field.enabled ? field.valueAt(hit) : null;
   const ms = measurePickMs(viewer.camera, ndc, [model.world]);
   const v = (p: THREE.Vector3, digits: number) => [p.x, p.y, p.z].map((c) => c.toFixed(digits)).join('  ');
   pickInfo.textContent =
@@ -182,6 +237,7 @@ canvas.addEventListener('pointerup', (e) => {
     `треугольник №${hit.faceIndex} (вершины ${hit.vertices.join(', ')})\n` +
     `барицентрия:  ${v(hit.barycoord, 3)}\n` +
     `от камеры: ${hit.distance.toFixed(1)} мм\n` +
+    (temperature != null ? `T = ${temperature.toFixed(0)} °C (шаг ${field.step})\n` : '') +
     `луч: ${(ms * 1000).toFixed(1)} мкс (${fmt(model.info.triangles)} треуг.)`;
 });
 
@@ -196,11 +252,11 @@ viewer.onRender(() => {
 });
 
 // --- Старт: синтетическая пластина 400 × 12 × 120 мм (уже в мм и Y вверх), лежит на полу ---
+// Мелкая сетка (шаг 2.5 мм): поле задано в вершинах, и на 8 углах коробки его не нарисовать
 const plate = new THREE.Mesh(
-  new THREE.BoxGeometry(400, 12, 120).translate(0, 6, 0),
+  new THREE.BoxGeometry(400, 12, 120, 160, 2, 48).translate(0, 6, 0),
   new THREE.MeshStandardMaterial({ color: 0x9aa4ae, roughness: 0.7, metalness: 0.1 }),
 );
 model.set('Пластина (демо)', plate, { unit: 'mm', zUp: false });
-showModelInfo();
 rig.setView('iso');
-fit();
+onModelChanged();

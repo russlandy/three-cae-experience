@@ -1,6 +1,6 @@
 # Карта кода
 
-Где что лежит и кто кого вызывает. Состояние на шаг 6.
+Где что лежит и кто кого вызывает. Состояние на шаг 7.
 
 ## Файлы
 
@@ -21,15 +21,23 @@ src/
     model.ts                ModelSlot: текущая деталь в сцене + исходник для смены единиц
     picking.ts              pixelToNdc (общая), pick: луч → точка/нормаль/треугольник/барицентрия; замер
     selection.ts            Selection: маркер постоянного экранного размера + подсветка треугольника
+    field-view.ts           FieldView: поле на детали (атрибут aScalar + ShaderMaterial), шаг, палитра, диапазон
 
   data/                     — данные извне
     loaders.ts              parseModel (STL/glTF), toWorldMm (ЕДИНСТВЕННОЕ место конвертации), describeModel
+    field.ts                generateField (источник по шву + остывание), valueAt (барицентрия), seamFromBox
+    palette.ts              viridis / jet → RGBA → DataTexture 256×1; CSS-градиент для легенды
+
+  shaders/
+    field.vert.glsl         aScalar → varying, нормаль в пространстве камеры
+    field.frag.glsl         значение → палитра; изотермы через fwidth; лёгкое затенение
 
   ui/                       — HTML поверх и справа от сцены
     panel.ts                строительные блоки панели: секция, переключатель, кнопки, список, галочка
     overlay.ts              подписи осей (мир → экран) и масштабная линейка
+    legend.ts               цветовая шкала поля с порогами 1500 / 900 / 720 °C
 
-  *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, loaders, picking
+  *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, loaders, picking, field, palette
 
 scripts/make-samples.mjs    генератор тестовых моделей
 samples/                    plate-cm-zup.stl (см, Z↑), plate-m.gltf (м, Y↑)
@@ -88,3 +96,10 @@ main.ts
 **Клик (выбор):** `pointerdown` запоминает позицию → `pointerup` со сдвигом < 4 px →
 `pixelToNdc` → `pick(camera, ndc, [model.world])` → `selection.show` (маркер + треугольник) →
 панель «Выбор» + `measurePickMs`. Смена детали/единиц → `clearPick`.
+
+**Смена детали:** `onModelChanged()` в main.ts — сброс выбора → сводка → `field.attach(model.world)`
+(генерация поля по вершинам, атрибут `aScalar`, материал поля) → fit.
+
+**Смена шага времени:** ползунок → `field.setStep(k)` → `attribute.array.set(steps[k])`,
+`needsUpdate = true` → пересчёт диапазона (если авто) → кадр → легенда обновляется в `onRender`.
+Палитра / диапазон / изотермы / затенение — только uniform материала.

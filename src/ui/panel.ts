@@ -100,3 +100,32 @@ export function checkbox(
   parent.append(wrap);
   return (checked) => (input.checked = checked);
 }
+
+/** Ползунок с подписью значения. Возвращает функцию «выставить значение» без вызова onChange */
+export function slider(
+  parent: HTMLElement,
+  label: string,
+  { min, max, step, value }: { min: number; max: number; step: number; value: number },
+  format: (v: number) => string,
+  onChange: (v: number) => void,
+): (v: number) => void {
+  const wrap = document.createElement('label');
+  wrap.className = 'field';
+  const input = document.createElement('input');
+  input.type = 'range';
+  Object.assign(input, { min, max, step, value });
+  const out = document.createElement('span');
+  out.className = 'readout';
+  const show = () => (out.textContent = `${label}: ${format(+input.value)}`);
+  input.addEventListener('input', () => {
+    show();
+    onChange(+input.value);
+  });
+  show();
+  wrap.append(input, out);
+  parent.append(wrap);
+  return (v) => {
+    input.value = `${v}`;
+    show();
+  };
+}

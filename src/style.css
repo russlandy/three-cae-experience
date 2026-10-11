@@ -136,6 +136,47 @@ input[type='file'] {
   pointer-events: none;
 }
 
+/* Легенда поля: справа поверх сцены */
+.legend {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.legend__bar {
+  position: relative;
+  width: 18px;
+  height: 260px;
+  border: 1px solid #353b43;
+  border-radius: 2px;
+}
+
+/* Отметка порога: черта через шкалу и подпись слева */
+.legend__tick {
+  position: absolute;
+  right: -2px;
+  width: 26px;
+  height: 0;
+  border-top: 2px solid #fff;
+  transform: translateY(1px);
+  pointer-events: auto;
+  cursor: help;
+  font-size: 11px;
+  line-height: 0;
+  text-indent: -40px;
+  white-space: nowrap;
+}
+
+input[type='range'] {
+  flex: 1;
+}
+
 .readout {
   white-space: pre-line;
   font-variant-numeric: tabular-nums;

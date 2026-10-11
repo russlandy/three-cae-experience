@@ -12,8 +12,8 @@
 | 4. Орбита, зум к курсору | [steps/04-navigation.md](steps/04-navigation.md) | готово |
 | 5. Загрузка STL / glTF | [steps/05-loading.md](steps/05-loading.md) | готово |
 | 6. Picking лучом | [steps/06-picking.md](steps/06-picking.md) | готово |
-| 7. Поле температур | — | дальше |
-| 8. Срез | — | |
+| 7. Поле температур | [steps/07-field.md](steps/07-field.md) | готово |
+| 8. Срез | — | дальше |
 | 9. Зонд и время | — | |
 | 10. Счётчики и утечки | — | |
 
