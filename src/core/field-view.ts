@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import vertexShader from '../shaders/field.vert.glsl?raw';
 import fragmentShader from '../shaders/field.frag.glsl?raw';
-import { generateField, seamFromBox, valueAt, type Field, type FieldParams } from '../data/field';
+import { generateField, seamFromBox, valueAt, type Field, type FieldParams, type Seam } from '../data/field';
 import { paletteTexture, type PaletteName } from '../data/palette';
 import type { PickResult } from './picking';
 import type { Viewer } from './viewer';
@@ -42,6 +42,8 @@ export class FieldView {
   private viewer: Viewer;
   private meshes: MeshField[] = [];
   private textures: Partial<Record<PaletteName, THREE.DataTexture>> = {};
+  private seam: Seam | null = null;
+  private clip: THREE.Plane | null = null;
 
   constructor(viewer: Viewer) {
     this.viewer = viewer;
@@ -54,13 +56,15 @@ export class FieldView {
         uMax: { value: FIXED_RANGE[1] },
         uIsoStep: { value: 0 },
         uShade: { value: 0.25 },
+        uClipPlane: { value: new THREE.Vector4() },
+        uClipEnabled: { value: false },
       },
     });
   }
 
   /** Посчитать поле для детали и надеть на неё материал поля */
   attach(world: THREE.Group) {
-    const seam = seamFromBox(new THREE.Box3().setFromObject(world));
+    const seam = (this.seam = seamFromBox(new THREE.Box3().setFromObject(world)));
     this.meshes = [];
     world.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
@@ -75,6 +79,36 @@ export class FieldView {
     });
     this.setStep(Math.min(this.step, this.stepCount - 1));
     this.setEnabled(this.enabled);
+    this.setClip(this.clip);
+  }
+
+  /**
+   * Срез плоскостью (null — без среза). Поле режется своим discard в шейдере (ADR 0008),
+   * обычный материал детали (поле выключено) — встроенным clippingPlanes three.
+   * Обе стороны граней: сквозь срез видна изнанка дальних стенок, иначе деталь выглядит пустой коробкой без задней стенки
+   */
+  setClip(plane: THREE.Plane | null) {
+    this.clip = plane;
+    const u = this.material.uniforms;
+    u.uClipEnabled.value = plane != null;
+    if (plane) u.uClipPlane.value.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+    const side = plane ? THREE.DoubleSide : THREE.FrontSide;
+    this.material.side = side;
+    for (const m of this.meshes) {
+      for (const mat of [m.originalMaterial].flat()) {
+        mat.clippingPlanes = plane ? [plane] : null;
+        mat.side = side;
+      }
+    }
+    this.viewer.requestRender();
+  }
+
+  /**
+   * Поле той же модели в произвольных точках (внутри детали — для 2D-сечения).
+   * В поверхностной сетке значений внутри нет; в настоящем расчёте их дала бы объёмная сетка.
+   */
+  sample(points: Float32Array): Field | null {
+    return this.seam ? generateField(points, { ...FIELD_PARAMS, seam: this.seam }) : null;
   }
 
   setEnabled(on: boolean) {

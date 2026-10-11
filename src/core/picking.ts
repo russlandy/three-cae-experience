@@ -38,12 +38,19 @@ const normalMatrix = new THREE.Matrix3();
 /**
  * Пиксель → NDC → луч (обратная проекция) → ближайшее пересечение с треугольниками.
  * Возвращает null, если луч ни во что не попал.
+ * clip — плоскость среза: Raycaster о ней не знает и попадает и в отрезанную (невидимую) часть,
+ * поэтому берём первое попадание с видимой стороны (d ≥ 0).
  */
-export function pick(camera: THREE.Camera, ndc: THREE.Vector2, objects: THREE.Object3D[]): PickResult | null {
+export function pick(
+  camera: THREE.Camera,
+  ndc: THREE.Vector2,
+  objects: THREE.Object3D[],
+  clip?: THREE.Plane | null,
+): PickResult | null {
   raycaster.setFromCamera(ndc, camera);
   const hits = raycaster.intersectObjects(objects, true);
 
-  const hit = hits[0];
+  const hit = clip ? hits.find((h) => clip.distanceToPoint(h.point) >= 0) : hits[0];
   if (!hit || !hit.face || hit.faceIndex == null || !hit.barycoord) return null;
 
   // face.normal — в координатах объекта. В мир нормаль переводится НЕ матрицей объекта,

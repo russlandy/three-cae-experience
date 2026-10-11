@@ -60,3 +60,21 @@ describe('pick: луч через пиксель → что под курсор�
     expect(pick(camera, new THREE.Vector2(0.9, 0.9), [plate])).toBeNull();
   });
 });
+
+describe('pick со срезом: попадания в отрезанную часть пропускаются', () => {
+  test('срез z > 0 → передняя грань (z = 60) скрыта, луч доходит до задней изнутри: (0,0,−60), 1060 мм', () => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 1, 10_000);
+    camera.position.set(0, 0, 1000);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    // DoubleSide — как у детали со срезом: иначе внутреннюю сторону грани луч не видит
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(400, 12, 120), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    plate.updateMatrixWorld();
+    const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0); // остаётся z ≤ 0
+
+    const hit = pick(camera, new THREE.Vector2(0, 0), [plate], clip)!;
+
+    expect(round(hit.point)).toEqual([0, 0, -60]);
+    expect(hit.distance).toBeCloseTo(1060, 3);
+  });
+});

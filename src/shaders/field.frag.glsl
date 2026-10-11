@@ -3,9 +3,12 @@ uniform float uMin;          // диапазон легенды, °C
 uniform float uMax;
 uniform float uIsoStep;      // шаг изотерм, °C; 0 — выключены
 uniform float uShade;        // 0..1 — сколько затенения подмешать
+uniform vec4 uClipPlane;     // плоскость среза в мире: xyz — нормаль, w — константа; d = n·p + w
+uniform bool uClipEnabled;
 
 varying float vScalar;
 varying vec3 vNormalView;
+varying vec3 vWorldPos;
 
 const float PALETTE_SIZE = 256.0;
 
@@ -31,6 +34,16 @@ void main() {
   // Освещение искажает считывание цвета, поэтому по умолчанию его мало (uShade ≈ 0.25)
   float lambert = abs(normalize(vNormalView).z);
   color *= mix(1.0, 0.45 + 0.55 * lambert, uShade);
+
+  // --- изнанка: при срезе сквозь дыру видна внутренняя сторона дальних граней ---
+  // Красить её полем нельзя: это температура на поверхности дальней стенки, а глаз прочтёт её
+  // как цвет сечения. Нейтральный серый честно говорит «сечения здесь нет».
+  // Настоящее решение — заглушка через трафарет (stencil), см. docs/steps/08
+  if (!gl_FrontFacing) color = vec3(0.32) * (0.6 + 0.4 * lambert);
+
+  // --- срез: всё по отрицательную сторону плоскости не рисуем ---
+  // discard — в самом конце: производные (fwidth выше) внутри ветвления после discard не определены
+  if (uClipEnabled && dot(uClipPlane.xyz, vWorldPos) + uClipPlane.w < 0.0) discard;
 
   gl_FragColor = vec4(color, 1.0);
 }

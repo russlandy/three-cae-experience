@@ -11,8 +11,10 @@ import { Selection } from './core/selection';
 import { FieldView, type RangeMode } from './core/field-view';
 import { parseModel, type ImportOptions, type LengthUnit } from './data/loaders';
 import type { PaletteName } from './data/palette';
+import { planeAt, sectionAxes, sectionOf, type Axis } from './data/section';
 import { Legend } from './ui/legend';
 import { Overlay } from './ui/overlay';
+import { SectionView } from './ui/section-view';
 import { buttonRow, checkbox, readout, section, selectBox, slider, toggleGroup } from './ui/panel';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
@@ -31,6 +33,7 @@ const nav = new Navigation(viewer, canvas);
 const model = new ModelSlot(viewer.scene);
 const field = new FieldView(viewer);
 const legend = new Legend(viewport);
+const sectionView = new SectionView(viewport);
 viewer.onRender(() => legend.update(field.palette, field.range, field.enabled));
 
 const fit = () => {
@@ -77,6 +80,7 @@ function onModelChanged() {
   clearPick();
   showModelInfo();
   field.attach(model.world);
+  updateClip();
   fit();
 }
 
@@ -122,7 +126,10 @@ slider(
   'шаг',
   { min: 0, max: field.stepCount - 1, step: 1, value: 0 },
   (v) => `${v} / ${field.stepCount - 1}`,
-  (v) => field.setStep(v),
+  (v) => {
+    field.setStep(v);
+    drawSection();
+  },
 );
 toggleGroup<PaletteName>(
   fieldSection,
@@ -131,7 +138,10 @@ toggleGroup<PaletteName>(
     { value: 'jet', label: 'Радуга (jet)' },
   ],
   field.palette,
-  (p) => field.setPalette(p),
+  (p) => {
+    field.setPalette(p);
+    drawSection();
+  },
 );
 toggleGroup<RangeMode>(
   fieldSection,
@@ -140,7 +150,10 @@ toggleGroup<RangeMode>(
     { value: 'auto', label: 'Авто (min–max)' },
   ],
   field.rangeMode,
-  (m) => field.setRangeMode(m),
+  (m) => {
+    field.setRangeMode(m);
+    drawSection();
+  },
 );
 selectBox(
   fieldSection,
@@ -156,6 +169,87 @@ selectBox(
 );
 slider(fieldSection, 'затенение', { min: 0, max: 1, step: 0.05, value: 0.25 }, (v) => v.toFixed(2), (v) =>
   field.setShade(v),
+);
+
+// --- Срез ---
+const clip = { on: false, axis: 'x' as Axis, fraction: 0.5 };
+const clipPlane = new THREE.Plane();
+/** Наибольший размер картинки 2D-сечения, px (= ячеек) */
+const SECTION_MAX_PX = { u: 320, v: 160 };
+
+/** Положение плоскости в мм по текущим габаритам детали */
+const clipPositionMm = () => {
+  const box = model.box();
+  return THREE.MathUtils.lerp(box.min[clip.axis], box.max[clip.axis], clip.fraction);
+};
+
+/** Пересчитать плоскость, срез на детали и 2D-сечение */
+function updateClip() {
+  clearPick(); // выбранная точка могла оказаться в отрезанной части
+  if (!clip.on) {
+    field.setClip(null);
+    sectionView.set(null);
+    return;
+  }
+  const box = model.box();
+  field.setClip(planeAt(box, clip.axis, clip.fraction, clipPlane));
+
+  // Размер ячейки — чтобы сечение влезло в картинку, один пиксель на ячейку
+  const size = box.getSize(new THREE.Vector3());
+  const { u, v } = sectionAxes(clip.axis);
+  const cellMm = Math.max(Math.abs(size.dot(u)) / SECTION_MAX_PX.u, Math.abs(size.dot(v)) / SECTION_MAX_PX.v);
+  const geometries: THREE.BufferGeometry[] = [];
+  model.world.traverse((o) => {
+    if (o instanceof THREE.Mesh) geometries.push(o.geometry);
+  });
+  const t0 = performance.now();
+  const sec = sectionOf(geometries, clipPlane, clip.axis, cellMm);
+  const values = field.sample(sec.points);
+  const ms = performance.now() - t0;
+  const { cols, rows } = sec.raster;
+  sectionView.set(
+    values && {
+      section: sec,
+      field: values,
+      caption:
+        `Сечение ${clip.axis.toUpperCase()} = ${clipPositionMm().toFixed(1)} мм\n` +
+        `${fmt(cols * cellMm)} × ${fmt(rows * cellMm)} мм · ячейка ${cellMm.toFixed(2)} мм · ${ms.toFixed(0)} мс`,
+    },
+  );
+  drawSection();
+}
+
+function drawSection() {
+  sectionView.draw(field.step, field.range, field.palette);
+}
+
+const clipSection = section(panel, 'Срез');
+checkbox(clipSection, 'Срез плоскостью', clip.on, (on) => {
+  clip.on = on;
+  updateClip();
+});
+toggleGroup<Axis>(
+  clipSection,
+  [
+    { value: 'x', label: 'X (поперёк шва)' },
+    { value: 'y', label: 'Y' },
+    { value: 'z', label: 'Z' },
+  ],
+  clip.axis,
+  (axis) => {
+    clip.axis = axis;
+    updateClip();
+  },
+);
+slider(
+  clipSection,
+  'положение',
+  { min: 0, max: 1, step: 0.005, value: clip.fraction },
+  (f) => `${(f * 100).toFixed(1)} %`,
+  (f) => {
+    clip.fraction = f;
+    updateClip();
+  },
 );
 
 // --- Камера ---
@@ -224,7 +318,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_TOLERANCE_PX) return;
 
   const ndc = pixelToNdc(e.clientX, e.clientY, canvas.getBoundingClientRect());
-  const hit = pick(viewer.camera, ndc, [model.world]);
+  const hit = pick(viewer.camera, ndc, [model.world], clip.on ? clipPlane : null);
   if (!hit) return clearPick();
 
   selection.show(hit);

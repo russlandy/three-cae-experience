@@ -25,6 +25,8 @@ export class Viewer {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Без этого material.clippingPlanes игнорируются (срез обычного материала детали, шаг 8)
+    this.renderer.localClippingEnabled = true;
     this.scene.background = new THREE.Color(0x1a1d21);
 
     // Следим за размером самого канваса, а не окна: колонка grid может
