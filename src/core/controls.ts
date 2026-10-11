@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Viewer } from './viewer';
 import { zoomAt } from './zoom';
+import { pixelToNdc } from './picking';
 
 export type ZoomMode = 'cursor' | 'center';
 
@@ -49,10 +50,7 @@ export class Navigation {
 
     if (this.zoomMode === 'cursor') {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      this.ndc.set(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1, // Y в пикселях вниз, в NDC вверх
-      );
+      pixelToNdc(e.clientX, e.clientY, rect, this.ndc);
     } else {
       this.ndc.set(0, 0);
     }

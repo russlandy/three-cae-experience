@@ -1,6 +1,6 @@
 # Карта кода
 
-Где что лежит и кто кого вызывает. Состояние на шаг 5.
+Где что лежит и кто кого вызывает. Состояние на шаг 6.
 
 ## Файлы
 
@@ -19,6 +19,8 @@ src/
     reference.ts            сетка-пол и оси; соглашение «мм, Y вверх» записано здесь
     lights.ts               полусферический свет + «головной» свет за камерой
     model.ts                ModelSlot: текущая деталь в сцене + исходник для смены единиц
+    picking.ts              pixelToNdc (общая), pick: луч → точка/нормаль/треугольник/барицентрия; замер
+    selection.ts            Selection: маркер постоянного экранного размера + подсветка треугольника
 
   data/                     — данные извне
     loaders.ts              parseModel (STL/glTF), toWorldMm (ЕДИНСТВЕННОЕ место конвертации), describeModel
@@ -27,7 +29,7 @@ src/
     panel.ts                строительные блоки панели: секция, переключатель, кнопки, список, галочка
     overlay.ts              подписи осей (мир → экран) и масштабная линейка
 
-  *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, loaders
+  *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, loaders, picking
 
 scripts/make-samples.mjs    генератор тестовых моделей
 samples/                    plate-cm-zup.stl (см, Z↑), plate-m.gltf (м, Y↑)
@@ -82,3 +84,7 @@ main.ts
 | активная камера | `CameraRig.active` | `Viewer.camera` (геттер), `Navigation.syncCamera` |
 | деталь в сцене | `ModelSlot.world` | `fit` берёт `model.box()` |
 | единицы детали | `ModelSlot.options` | панель показывает |
+
+**Клик (выбор):** `pointerdown` запоминает позицию → `pointerup` со сдвигом < 4 px →
+`pixelToNdc` → `pick(camera, ndc, [model.world])` → `selection.show` (маркер + треугольник) →
+панель «Выбор» + `measurePickMs`. Смена детали/единиц → `clearPick`.

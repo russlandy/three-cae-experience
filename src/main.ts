@@ -6,6 +6,8 @@ import type { Projection, ViewName } from './core/cameras';
 import { Navigation, type ZoomMode } from './core/controls';
 import { addLights } from './core/lights';
 import { ModelSlot } from './core/model';
+import { measurePickMs, pick, pixelToNdc } from './core/picking';
+import { Selection } from './core/selection';
 import { parseModel, type ImportOptions, type LengthUnit } from './data/loaders';
 import { Overlay } from './ui/overlay';
 import { buttonRow, checkbox, readout, section, selectBox, toggleGroup } from './ui/panel';
@@ -66,6 +68,7 @@ function showModelInfo() {
 
 function applyOptions(options: ImportOptions) {
   model.apply(options);
+  clearPick();
   showModelInfo();
   fit();
 }
@@ -74,6 +77,7 @@ async function loadFile(file: File) {
   try {
     const parsed = await parseModel(file.name, await file.arrayBuffer());
     model.set(file.name, parsed.source, parsed.defaults);
+    clearPick();
     setUnitControl(parsed.defaults.unit);
     setZUpControl(parsed.defaults.zUp);
     showModelInfo();
@@ -142,6 +146,43 @@ window.addEventListener('keydown', (e) => {
     selectProjection(next);
     nav.syncCamera();
   }
+});
+
+// --- Выбор лучом ---
+const selection = new Selection(viewer);
+const pickInfo = readout(section(panel, 'Выбор'));
+pickInfo.textContent = 'Клик по детали';
+
+function clearPick() {
+  selection.clear();
+  pickInfo.textContent = 'Клик по детали';
+}
+
+// ЛКМ одновременно крутит орбиту. Клик — это нажатие и отпускание почти в одной точке
+const CLICK_TOLERANCE_PX = 4;
+const down = { x: 0, y: 0 };
+canvas.addEventListener('pointerdown', (e) => {
+  down.x = e.clientX;
+  down.y = e.clientY;
+});
+canvas.addEventListener('pointerup', (e) => {
+  if (e.button !== 0) return;
+  if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_TOLERANCE_PX) return;
+
+  const ndc = pixelToNdc(e.clientX, e.clientY, canvas.getBoundingClientRect());
+  const hit = pick(viewer.camera, ndc, [model.world]);
+  if (!hit) return clearPick();
+
+  selection.show(hit);
+  const ms = measurePickMs(viewer.camera, ndc, [model.world]);
+  const v = (p: THREE.Vector3, digits: number) => [p.x, p.y, p.z].map((c) => c.toFixed(digits)).join('  ');
+  pickInfo.textContent =
+    `точка, мм:  ${v(hit.point, 1)}\n` +
+    `нормаль:  ${v(hit.normal, 3)}\n` +
+    `треугольник №${hit.faceIndex} (вершины ${hit.vertices.join(', ')})\n` +
+    `барицентрия:  ${v(hit.barycoord, 3)}\n` +
+    `от камеры: ${hit.distance.toFixed(1)} мм\n` +
+    `луч: ${(ms * 1000).toFixed(1)} мкс (${fmt(model.info.triangles)} треуг.)`;
 });
 
 // --- Счётчики ---

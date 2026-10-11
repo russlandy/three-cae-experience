@@ -11,8 +11,8 @@
 | 3. Камеры, виды, fit-to-object | [steps/03-cameras.md](steps/03-cameras.md) | готово |
 | 4. Орбита, зум к курсору | [steps/04-navigation.md](steps/04-navigation.md) | готово |
 | 5. Загрузка STL / glTF | [steps/05-loading.md](steps/05-loading.md) | готово |
-| 6. Picking лучом | — | дальше |
-| 7. Поле температур | — | |
+| 6. Picking лучом | [steps/06-picking.md](steps/06-picking.md) | готово |
+| 7. Поле температур | — | дальше |
 | 8. Срез | — | |
 | 9. Зонд и время | — | |
 | 10. Счётчики и утечки | — | |
