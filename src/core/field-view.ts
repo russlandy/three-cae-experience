@@ -3,6 +3,7 @@ import vertexShader from '../shaders/field.vert.glsl?raw';
 import fragmentShader from '../shaders/field.frag.glsl?raw';
 import { generateField, seamFromBox, valueAt, type Field, type FieldParams, type Seam } from '../data/field';
 import { paletteTexture, type PaletteName } from '../data/palette';
+import { cycleAt } from '../data/cycle';
 import type { PickResult } from './picking';
 import type { Viewer } from './viewer';
 
@@ -157,6 +158,12 @@ export class FieldView {
   valueAt(hit: PickResult): number | null {
     const m = this.meshes.find((x) => x.mesh === hit.mesh);
     return m ? valueAt(m.field.steps[this.step], hit.vertices, hit.barycoord) : null;
+  }
+
+  /** Термический цикл в точке попадания луча: значение по всем шагам, °C */
+  cycle(hit: PickResult): Float32Array | null {
+    const m = this.meshes.find((x) => x.mesh === hit.mesh);
+    return m ? cycleAt(m.field.steps, hit.vertices, hit.barycoord) : null;
   }
 
   private updateRange() {

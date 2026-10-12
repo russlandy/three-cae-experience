@@ -6,15 +6,19 @@ import type { Projection, ViewName } from './core/cameras';
 import { Navigation, type ZoomMode } from './core/controls';
 import { addLights } from './core/lights';
 import { ModelSlot } from './core/model';
-import { measurePickMs, pick, pixelToNdc } from './core/picking';
+import { measurePickMs, pick, pixelToNdc, type PickResult } from './core/picking';
 import { Selection } from './core/selection';
 import { FieldView, type RangeMode } from './core/field-view';
+import { Player } from './core/playback';
+import { ProbeMarkers } from './core/probes';
+import { coolingTime } from './data/cycle';
 import { parseModel, type ImportOptions, type LengthUnit } from './data/loaders';
 import type { PaletteName } from './data/palette';
 import { planeAt, sectionAxes, sectionOf, type Axis } from './data/section';
 import { Legend } from './ui/legend';
 import { Overlay } from './ui/overlay';
 import { SectionView } from './ui/section-view';
+import { ThermalChart, type ProbeCurve } from './ui/chart';
 import { buttonRow, checkbox, readout, section, selectBox, slider, toggleGroup } from './ui/panel';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
@@ -78,6 +82,7 @@ function showModelInfo() {
 /** Деталь сменилась (загрузка или смена единиц): сбросить выбор, пересчитать поле, вписать */
 function onModelChanged() {
   clearPick();
+  setProbes([]); // зонды ссылались на треугольники старой детали
   showModelInfo();
   field.attach(model.world);
   updateClip();
@@ -121,16 +126,62 @@ viewport.addEventListener('drop', (e) => {
 // --- Поле температур ---
 const fieldSection = section(panel, 'Поле температур');
 checkbox(fieldSection, 'Показывать поле', field.enabled, (on) => field.setEnabled(on));
-slider(
+const setStepSlider = slider(
   fieldSection,
   'шаг',
   { min: 0, max: field.stepCount - 1, step: 1, value: 0 },
   (v) => `${v} / ${field.stepCount - 1}`,
+  (v) => goToStep(v),
+);
+
+// --- Время: проигрывание ---
+const player = new Player(
+  viewer,
+  () => field.stepCount,
+  () => field.step,
+  (step) => goToStep(step, false),
+);
+const playButton = document.createElement('button');
+const togglePlay = () => {
+  if (player.playing) player.pause();
+  else player.play();
+  playButton.textContent = player.playing ? '❚❚ Пауза' : '▶ Пуск';
+};
+playButton.textContent = '▶ Пуск';
+playButton.title = 'Пробел';
+playButton.addEventListener('click', togglePlay);
+const playRow = document.createElement('div');
+playRow.className = 'btn-row';
+playRow.append(playButton);
+fieldSection.append(playRow);
+selectBox(
+  playRow,
+  'скорость',
+  [
+    { value: '4', label: '4 шага/с' },
+    { value: '8', label: '8 шагов/с' },
+    { value: '15', label: '15 шагов/с' },
+  ],
+  String(player.stepsPerSecond),
   (v) => {
-    field.setStep(v);
-    drawSection();
+    player.stepsPerSecond = +v;
+    player.restartFrom(field.step);
   },
 );
+
+/**
+ * Единственное место смены шага. Все представления шага — сцена, ползунок, 2D-сечение, график,
+ * T в панели выбора — обновляются отсюда, кто бы шаг ни поменял (ползунок, график, проигрывание)
+ */
+function goToStep(step: number, fromUser = true) {
+  field.setStep(step);
+  setStepSlider(step);
+  drawSection();
+  chart.setStep(step);
+  showPickInfo();
+  // Пользователь сдвинул шаг во время проигрывания — продолжаем уже от нового шага
+  if (fromUser && player.playing) player.restartFrom(step);
+}
 toggleGroup<PaletteName>(
   fieldSection,
   [
@@ -288,7 +339,10 @@ window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
   if (KEY_VIEWS[e.key]) setView(KEY_VIEWS[e.key]);
   else if (e.key === 'f' || e.key === 'F') fit();
-  else if (e.key === 'p' || e.key === 'P') {
+  else if (e.key === ' ') {
+    e.preventDefault(); // пробел иначе прокрутит страницу или нажмёт кнопку в фокусе
+    togglePlay();
+  } else if (e.key === 'p' || e.key === 'P') {
     const next = rig.active === rig.ortho ? 'perspective' : 'ortho';
     rig.setProjection(next);
     selectProjection(next);
@@ -301,9 +355,64 @@ const selection = new Selection(viewer);
 const pickInfo = readout(section(panel, 'Выбор'));
 pickInfo.textContent = 'Клик по детали';
 
+/** Последний выбор: T в панели пересчитывается при смене шага (раньше застывала на шаге клика) */
+let lastPick: { hit: PickResult; ms: number } | null = null;
+
 function clearPick() {
+  lastPick = null;
   selection.clear();
-  pickInfo.textContent = 'Клик по детали';
+  showPickInfo();
+}
+
+function showPickInfo() {
+  if (!lastPick) {
+    pickInfo.textContent = 'Клик по детали';
+    return;
+  }
+  const { hit, ms } = lastPick;
+  const temperature = field.enabled ? field.valueAt(hit) : null;
+  const v = (p: THREE.Vector3, digits: number) => [p.x, p.y, p.z].map((c) => c.toFixed(digits)).join('  ');
+  pickInfo.textContent =
+    `точка, мм:  ${v(hit.point, 1)}\n` +
+    `нормаль:  ${v(hit.normal, 3)}\n` +
+    `треугольник №${hit.faceIndex} (вершины ${hit.vertices.join(', ')})\n` +
+    `барицентрия:  ${v(hit.barycoord, 3)}\n` +
+    `от камеры: ${hit.distance.toFixed(1)} мм\n` +
+    (temperature != null ? `T = ${temperature.toFixed(0)} °C (шаг ${field.step})\n` : '') +
+    `луч: ${(ms * 1000).toFixed(1)} мкс (${fmt(model.info.triangles)} треуг.)`;
+}
+
+// --- Зонды и график термического цикла ---
+const PROBE_COLORS = ['#ffb020', '#4fc3f7', '#f06292', '#e6e6e6'];
+const chart = new ThermalChart(document.querySelector<HTMLCanvasElement>('#chart')!, field.stepCount, (step) =>
+  goToStep(step),
+);
+const probeMarkers = new ProbeMarkers(viewer);
+let probes: Array<ProbeCurve & { point: THREE.Vector3 }> = [];
+
+function setProbes(next: typeof probes) {
+  probes = next;
+  probeMarkers.set(probes);
+  chart.setProbes(probes);
+}
+
+/** Клик — зонд вместо всех прежних; Shift + клик — ещё один (до четырёх, самый старый уходит) */
+function placeProbe(hit: PickResult, add: boolean) {
+  const curve = field.cycle(hit);
+  if (!curve) return;
+  const kept = add ? probes.slice(-(PROBE_COLORS.length - 1)) : [];
+  const color = PROBE_COLORS.find((c) => !kept.some((p) => p.color === c))!;
+  setProbes([
+    ...kept,
+    {
+      label: `Зонд ${PROBE_COLORS.indexOf(color) + 1}`,
+      color,
+      point: hit.point.clone(),
+      curve,
+      peak: Math.max(...curve),
+      t85: coolingTime(curve, 800, 500),
+    },
+  ]);
 }
 
 // ЛКМ одновременно крутит орбиту. Клик — это нажатие и отпускание почти в одной точке
@@ -322,17 +431,9 @@ canvas.addEventListener('pointerup', (e) => {
   if (!hit) return clearPick();
 
   selection.show(hit);
-  const temperature = field.enabled ? field.valueAt(hit) : null;
-  const ms = measurePickMs(viewer.camera, ndc, [model.world]);
-  const v = (p: THREE.Vector3, digits: number) => [p.x, p.y, p.z].map((c) => c.toFixed(digits)).join('  ');
-  pickInfo.textContent =
-    `точка, мм:  ${v(hit.point, 1)}\n` +
-    `нормаль:  ${v(hit.normal, 3)}\n` +
-    `треугольник №${hit.faceIndex} (вершины ${hit.vertices.join(', ')})\n` +
-    `барицентрия:  ${v(hit.barycoord, 3)}\n` +
-    `от камеры: ${hit.distance.toFixed(1)} мм\n` +
-    (temperature != null ? `T = ${temperature.toFixed(0)} °C (шаг ${field.step})\n` : '') +
-    `луч: ${(ms * 1000).toFixed(1)} мкс (${fmt(model.info.triangles)} треуг.)`;
+  lastPick = { hit, ms: measurePickMs(viewer.camera, ndc, [model.world]) };
+  showPickInfo();
+  placeProbe(hit, e.shiftKey);
 });
 
 // --- Счётчики ---

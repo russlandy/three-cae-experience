@@ -14,8 +14,8 @@
 | 6. Picking лучом | [steps/06-picking.md](steps/06-picking.md) | готово |
 | 7. Поле температур | [steps/07-field.md](steps/07-field.md) | готово |
 | 8. Срез и 2D-сечение | [steps/08-clipping.md](steps/08-clipping.md) | готово |
-| 9. Зонд и время | — | дальше |
-| 10. Счётчики и утечки | — | |
+| 9. Время, зонд, термический цикл | [steps/09-probe-time.md](steps/09-probe-time.md) | готово |
+| 10. Счётчики и утечки | — | дальше |
 
 ## Решения и словарь
 

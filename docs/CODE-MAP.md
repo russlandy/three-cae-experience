@@ -1,11 +1,11 @@
 # Карта кода
 
-Где что лежит и кто кого вызывает. Состояние на шаг 8.
+Где что лежит и кто кого вызывает. Состояние на шаг 9.
 
 ## Файлы
 
 ```
-index.html                  каркас: #viewport (сцена + HTML-слои), #panel справа
+index.html                  каркас: #viewport (сцена + HTML-слои), #panel справа, #chart под сценой
 src/
   main.ts                   ТОЧКА СБОРКИ. Создаёт всё, связывает панель с ядром. Логики почти нет
   style.css                 сетка страницы, панель, подписи, линейка, drop-зона
@@ -21,13 +21,17 @@ src/
     model.ts                ModelSlot: текущая деталь в сцене + исходник для смены единиц
     picking.ts              pixelToNdc (общая), pick: луч → точка/нормаль/треугольник/барицентрия; пропуск отрезанного; замер
     selection.ts            Selection: маркер постоянного экранного размера + подсветка треугольника
+    probes.ts               ProbeMarkers: цветные маркеры зондов (цвет = цвет кривой на графике)
+    playback.ts             playbackStep (шаг по времени), Player: проигрывание внутри рендера по требованию
     field-view.ts           FieldView: поле на детали (атрибут aScalar + ShaderMaterial), шаг, палитра, диапазон,
-                            срез setClip (uniform + clippingPlanes), sample() — поле в любых точках
+                            срез setClip (uniform + clippingPlanes), sample() — поле в любых точках,
+                            cycle(hit) — термический цикл в точке
 
   data/                     — данные извне
     loaders.ts              parseModel (STL/glTF), toWorldMm (ЕДИНСТВЕННОЕ место конвертации), describeModel
     field.ts                generateField (источник по шву + остывание), valueAt (барицентрия), seamFromBox
     palette.ts              viridis / jet → RGBA → DataTexture 256×1; CSS-градиент для легенды
+    cycle.ts                cycleAt (цикл в точке по всем шагам), coolingTime (t8/5)
     section.ts              planeAt, sliceMesh (сетка ∩ плоскость → отрезки), sectionAxes, sectionRaster (scanline),
                             sectionOf: деталь + плоскость → ячейки сечения и их мировые точки
 
@@ -40,8 +44,9 @@ src/
     overlay.ts              подписи осей (мир → экран) и масштабная линейка
     legend.ts               цветовая шкала поля с порогами 1500 / 900 / 720 °C
     section-view.ts         SectionView: 2D-сечение — канвас, ячейка = пиксель, линии порогов
+    chart.ts                ThermalChart: график цикла (HiDPI-канвас), stepAtX — клик/протяжка → шаг
 
-  *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, loaders, picking, field, palette, section
+  *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, loaders, picking, field, palette, section, cycle, playback, chart
 
 scripts/make-samples.mjs    генератор тестовых моделей
 samples/                    plate-cm-zup.stl (см, Z↑), plate-m.gltf (м, Y↑)
@@ -114,3 +119,11 @@ main.ts
 Дальше 2D: `sectionOf(геометрии, plane, ось, ячейка)` → `field.sample(точки ячеек)` (поле по шагам) →
 `sectionView.set` → `draw(шаг, диапазон, палитра)`. Смена шага/палитры/диапазона → только `draw`.
 **Клик при срезе:** `pick(…, clipPlane)` берёт первое попадание с видимой стороны плоскости.
+
+**Смена шага (шаг 9) — одна точка входа `goToStep(step)` в main.ts.** Источники: ползунок,
+клик/протяжка по графику (`stepAtX`), проигрывание (`Player` в `onBeforeRender`, шаг по времени).
+Представления: `field.setStep` (сцена) → ползунок → `drawSection` → `chart.setStep` → `showPickInfo`.
+
+**Клик по детали (шаг 9):** выбор как раньше + `placeProbe`: `field.cycle(hit)` (барицентрия по всем
+шагам) → `coolingTime` (t8/5) → `ProbeMarkers.set` и `chart.setProbes`. Shift — добавить зонд.
+Смена детали → `setProbes([])`.

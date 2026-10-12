@@ -11,11 +11,29 @@ body {
   font: 13px/1.4 system-ui, sans-serif;
 }
 
-/* Сцена слева, панель управления справа фиксированной ширины */
+/* Сцена слева, панель управления справа фиксированной ширины, под сценой — график цикла */
 #app {
   display: grid;
   grid-template-columns: 1fr 280px;
+  grid-template-rows: 1fr 190px;
   height: 100vh;
+}
+
+#panel {
+  grid-column: 2;
+  grid-row: 1 / 3; /* панель на всю высоту, рядом и со сценой, и с графиком */
+}
+
+/* График термического цикла: связанное со сценой представление, шаг 9 */
+#chart {
+  grid-column: 1;
+  grid-row: 2;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border-top: 1px solid #2c3138;
+  cursor: crosshair;
+  touch-action: none; /* протяжка по графику не должна прокручивать страницу на тач-экране */
 }
 
 /* Контейнер сцены: относительно него позиционируются HTML-слои (подписи осей, линейка) */
@@ -183,10 +201,9 @@ input[type='range'] {
   color: #b7bec7;
 }
 
-/* Заглушки до своих шагов: stats — шаг 10, legend — шаг 7, chart — шаг 9 */
+/* Заглушки до своих шагов: stats — шаг 10, legend — шаг 7 (легенда строится в .legend) */
 #stats,
-#legend,
-#chart {
+#legend {
   display: none;
 }
 
