@@ -1,6 +1,6 @@
 # Карта кода
 
-Где что лежит и кто кого вызывает. Состояние на шаг 9.
+Где что лежит и кто кого вызывает. Состояние на шаг 10.
 
 ## Файлы
 
@@ -11,14 +11,15 @@ src/
   style.css                 сетка страницы, панель, подписи, линейка, drop-зона
 
   core/                     — ядро вьюера: сцена, камеры, навигация
-    viewer.ts               Viewer: рендерер, сцена, РЕНДЕР ПО ТРЕБОВАНИЮ, ресайз, хуки до/после кадра; localClippingEnabled
+    viewer.ts               Viewer: рендерер, сцена, РЕНДЕР ПО ТРЕБОВАНИЮ, ресайз, хуки до/после кадра; localClippingEnabled;
+                            lastFrameMs (CPU), busy (запрошен ли кадр)
     cameras.ts              CameraRig: орто + перспектива, точка интереса, виды, fit, near/far
     zoom.ts                 zoomAt(): зум к курсору / к центру (инвариант «точка под курсором»)
     controls.ts             Navigation: OrbitControls (вращение, панорама, инерция) + колесо → zoomAt
     scale.ts                mmPerPixel(), niceScaleBar() — математика масштабной линейки
     reference.ts            сетка-пол и оси; соглашение «мм, Y вверх» записано здесь
     lights.ts               полусферический свет + «головной» свет за камерой
-    model.ts                ModelSlot: текущая деталь в сцене + исходник для смены единиц
+    model.ts                ModelSlot: текущая деталь в сцене + исходник для смены единиц; dispose по правилу владения
     picking.ts              pixelToNdc (общая), pick: луч → точка/нормаль/треугольник/барицентрия; пропуск отрезанного; замер
     selection.ts            Selection: маркер постоянного экранного размера + подсветка треугольника
     probes.ts               ProbeMarkers: цветные маркеры зондов (цвет = цвет кривой на графике)
@@ -46,7 +47,7 @@ src/
     section-view.ts         SectionView: 2D-сечение — канвас, ячейка = пиксель, линии порогов
     chart.ts                ThermalChart: график цикла (HiDPI-канвас), stepAtX — клик/протяжка → шаг
 
-  *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, loaders, picking, field, palette, section, cycle, playback, chart
+  *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, model, loaders, picking, field, palette, section, cycle, playback, chart
 
 scripts/make-samples.mjs    генератор тестовых моделей
 samples/                    plate-cm-zup.stl (см, Z↑), plate-m.gltf (м, Y↑)
@@ -101,6 +102,8 @@ main.ts
 | активная камера | `CameraRig.active` | `Viewer.camera` (геттер), `Navigation.syncCamera` |
 | деталь в сцене | `ModelSlot.world` | `fit` берёт `model.box()` |
 | единицы детали | `ModelSlot.options` | панель показывает |
+| геометрия мира в GPU | `ModelSlot.world` (клоны) | `dispose` при `apply` |
+| материалы детали | исходник `ModelSlot.source` | `dispose` только при `set` (новый файл) |
 
 **Клик (выбор):** `pointerdown` запоминает позицию → `pointerup` со сдвигом < 4 px →
 `pixelToNdc` → `pick(camera, ndc, [model.world])` → `selection.show` (маркер + треугольник) →
@@ -127,3 +130,7 @@ main.ts
 **Клик по детали (шаг 9):** выбор как раньше + `placeProbe`: `field.cycle(hit)` (барицентрия по всем
 шагам) → `coolingTime` (t8/5) → `ProbeMarkers.set` и `chart.setProbes`. Shift — добавить зонд.
 Смена детали → `setProbes([])`.
+
+**Счётчики (шаг 10):** `onRender` → `showStats()` читает `renderer.info` (за последний `render()`),
+`viewer.lastFrameMs`, `viewer.busy`; через 250 мс после кадра — ещё раз, чтобы показать «в покое».
+«Пересобрать ×10» → 10 × (`applyOptions` + два rAF) → разница `info.memory.geometries`.

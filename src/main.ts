@@ -437,14 +437,55 @@ canvas.addEventListener('pointerup', (e) => {
 });
 
 // --- Счётчики ---
-const stats = readout(section(panel, 'Счётчики'));
-viewer.onRender(() => {
+const statsSection = section(panel, 'Счётчики');
+const stats = readout(statsSection);
+const { info } = viewer.renderer;
+let idleTimer = 0;
+function showStats() {
   const cam = viewer.camera;
   stats.textContent =
     `three r${THREE.REVISION}\n` +
-    `кадров отрисовано: ${viewer.renderCount}\n` +
+    `кадров отрисовано: ${viewer.renderCount}` +
+    (viewer.busy ? ' · идут кадры' : ' · в покое, 0 кадров/с') +
+    `\n` +
+    `последний кадр: ${viewer.lastFrameMs.toFixed(2)} мс CPU\n` +
+    // info.render — за последний render(): у нас один вызов на кадр, autoReset обнуляет перед ним
+    `вызовов отрисовки: ${info.render.calls} · треугольников: ${fmt(info.render.triangles)}\n` +
+    // info.memory — что сейчас живёт в памяти GPU. Растёт без dispose — утечка
+    `в GPU: геометрий ${info.memory.geometries} · текстур ${info.memory.textures} · ` +
+    `программ ${info.programs?.length ?? 0}\n` +
+    `деталь: вершин ${fmt(model.info.vertices)} · треуг. ${fmt(model.info.triangles)}\n` +
     `near / far: ${cam.near.toFixed(1)} / ${fmt(cam.far)} мм`;
+}
+viewer.onRender(() => {
+  showStats();
+  // Кадр-событие не скажет «стало тихо»: проверяем чуть позже, остался ли запрос следующего кадра
+  clearTimeout(idleTimer);
+  idleTimer = window.setTimeout(showStats, 250);
 });
+
+// Воспроизведение утечки: пересобрать деталь 10 раз подряд, каждый раз с кадром — тогда новая
+// геометрия действительно уходит в GPU. Без dispose счётчик геометрий растёт на каждую пересборку
+checkbox(statsSection, 'dispose() старой детали', model.dispose, (on) => (model.dispose = on));
+const leakInfo = readout(statsSection);
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+buttonRow(statsSection, [
+  {
+    label: 'Пересобрать ×10',
+    title: 'Как 10 загрузок подряд: смотреть на «в GPU: геометрий»',
+    onClick: async () => {
+      const before = info.memory.geometries;
+      for (let i = 0; i < 10; i++) {
+        applyOptions(model.options);
+        await nextFrame();
+      }
+      const after = info.memory.geometries;
+      leakInfo.textContent =
+        `геометрий в GPU: ${before} → ${after} (${after - before >= 0 ? '+' : ''}${after - before})` +
+        (model.dispose ? '' : '\nбез dispose — утечка');
+    },
+  },
+]);
 
 // --- Старт: синтетическая пластина 400 × 12 × 120 мм (уже в мм и Y вверх), лежит на полу ---
 // Мелкая сетка (шаг 2.5 мм): поле задано в вершинах, и на 8 углах коробки его не нарисовать

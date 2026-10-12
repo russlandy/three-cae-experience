@@ -15,6 +15,13 @@ export class Viewer {
 
   /** Сколько кадров реально отрисовано с момента старта — для проверки, что в покое 0 */
   renderCount = 0;
+  /** Сколько CPU-времени занял последний renderer.render(), мс */
+  lastFrameMs = 0;
+
+  /** Запрошен ли следующий кадр. false в покое — requestAnimationFrame не крутится */
+  get busy() {
+    return this.renderRequested;
+  }
 
   private canvas: HTMLCanvasElement;
   private renderRequested = false;
@@ -68,7 +75,11 @@ export class Viewer {
     // Флаг сбрасывается ДО слушателей: запрос из onBeforeRender должен запланировать новый кадр
     this.renderRequested = false;
     for (const listener of this.beforeRenderListeners) listener();
+    const t0 = performance.now();
     this.renderer.render(this.scene, this.camera);
+    // Время CPU на подготовку и отправку команд, НЕ время GPU: render() возвращается, не дожидаясь
+    // видеокарты. Время GPU меряют запросами EXT_disjoint_timer_query, а не performance.now()
+    this.lastFrameMs = performance.now() - t0;
     this.renderCount++;
     for (const listener of this.renderListeners) listener();
   };
