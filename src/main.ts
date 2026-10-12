@@ -11,6 +11,7 @@ import { Selection } from './core/selection';
 import { FieldView, type RangeMode } from './core/field-view';
 import { Player } from './core/playback';
 import { ProbeMarkers } from './core/probes';
+import { disableBvh, enableBvh } from './core/bvh';
 import { coolingTime } from './data/cycle';
 import { parseModel, type ImportOptions, type LengthUnit } from './data/loaders';
 import type { PaletteName } from './data/palette';
@@ -55,6 +56,10 @@ const fileInput = document.createElement('input');
 fileInput.type = 'file';
 fileInput.accept = '.stl,.glb,.gltf';
 modelSection.append(fileInput);
+buttonRow(modelSection, [
+  { label: 'Демо 32 тыс.', title: 'Пластина 400 × 12 × 120, шаг сетки 2.5 мм', onClick: () => loadDemo(1) },
+  { label: 'Демо 0.5 млн', title: 'Та же пластина, сетка в 4 раза мельче: для замера picking с BVH и без', onClick: () => loadDemo(4) },
+]);
 
 const UNITS: Array<{ value: LengthUnit; label: string }> = [
   { value: 'mm', label: 'мм' },
@@ -85,6 +90,7 @@ function onModelChanged() {
   setProbes([]); // зонды ссылались на треугольники старой детали
   showModelInfo();
   field.attach(model.world);
+  if (bvh.on) bvh.buildMs = enableBvh(model.world);
   updateClip();
   fit();
 }
@@ -352,7 +358,16 @@ window.addEventListener('keydown', (e) => {
 
 // --- Выбор лучом ---
 const selection = new Selection(viewer);
-const pickInfo = readout(section(panel, 'Выбор'));
+const pickSection = section(panel, 'Выбор');
+/** BVH (шаг 11): дерево коробок над треугольниками — луч за микросекунды вместо перебора */
+const bvh = { on: true, buildMs: 0 };
+checkbox(pickSection, 'BVH (three-mesh-bvh)', bvh.on, (on) => {
+  bvh.on = on;
+  if (on) bvh.buildMs = enableBvh(model.world);
+  else disableBvh(model.world);
+  clearPick();
+});
+const pickInfo = readout(pickSection);
 pickInfo.textContent = 'Клик по детали';
 
 /** Последний выбор: T в панели пересчитывается при смене шага (раньше застывала на шаге клика) */
@@ -379,7 +394,8 @@ function showPickInfo() {
     `барицентрия:  ${v(hit.barycoord, 3)}\n` +
     `от камеры: ${hit.distance.toFixed(1)} мм\n` +
     (temperature != null ? `T = ${temperature.toFixed(0)} °C (шаг ${field.step})\n` : '') +
-    `луч: ${(ms * 1000).toFixed(1)} мкс (${fmt(model.info.triangles)} треуг.)`;
+    `луч: ${(ms * 1000).toFixed(1)} мкс (${fmt(model.info.triangles)} треуг., ` +
+    (bvh.on ? `BVH построен за ${bvh.buildMs.toFixed(0)} мс)` : 'перебор без BVH)');
 }
 
 // --- Зонды и график термического цикла ---
@@ -487,12 +503,21 @@ buttonRow(statsSection, [
   },
 ]);
 
-// --- Старт: синтетическая пластина 400 × 12 × 120 мм (уже в мм и Y вверх), лежит на полу ---
-// Мелкая сетка (шаг 2.5 мм): поле задано в вершинах, и на 8 углах коробки его не нарисовать
-const plate = new THREE.Mesh(
-  new THREE.BoxGeometry(400, 12, 120, 160, 2, 48).translate(0, 6, 0),
-  new THREE.MeshStandardMaterial({ color: 0x9aa4ae, roughness: 0.7, metalness: 0.1 }),
-);
-model.set('Пластина (демо)', plate, { unit: 'mm', zUp: false });
+/**
+ * Синтетическая пластина 400 × 12 × 120 мм (уже в мм и Y вверх), лежит на полу.
+ * Мелкая сетка (шаг 2.5 мм / density): поле задано в вершинах, и на 8 углах коробки его не нарисовать.
+ * density 4 — ≈0.5 млн треугольников: на ней разница перебора и BVH видна в живом приложении
+ */
+function loadDemo(density: number) {
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(400, 12, 120, 160 * density, 2 * density, 48 * density).translate(0, 6, 0),
+    new THREE.MeshStandardMaterial({ color: 0x9aa4ae, roughness: 0.7, metalness: 0.1 }),
+  );
+  model.set(density === 1 ? 'Пластина (демо)' : `Пластина (демо ×${density})`, plate, { unit: 'mm', zUp: false });
+  setUnitControl('mm');
+  setZUpControl(false);
+  onModelChanged();
+}
+
 rig.setView('iso');
-onModelChanged();
+loadDemo(1);

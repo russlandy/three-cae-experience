@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import * as THREE from 'three';
 import { pick, pixelToNdc } from './picking';
+import { enableBvh } from './bvh';
 
 describe('pixelToNdc: пиксель страницы → NDC канваса', () => {
   // Канвас 800 × 600, сдвинут на странице на (100, 50)
@@ -76,5 +77,48 @@ describe('pick со срезом: попадания в отрезанную ч�
 
     expect(round(hit.point)).toEqual([0, 0, -60]);
     expect(hit.distance).toBeCloseTo(1060, 3);
+  });
+});
+
+describe('pick с BVH: ускоряет, но не меняет результат', () => {
+  const camera = new THREE.PerspectiveCamera(45, 1, 1, 10_000);
+  camera.position.set(600, 500, 700);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld();
+  const densePlate = () =>
+    new THREE.Mesh(new THREE.BoxGeometry(400, 12, 120, 80, 2, 24), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+
+  test.each([
+    [0, 0],
+    [0.1, -0.05],
+    [-0.2, 0.1],
+  ])('луч через NDC (%f, %f): та же точка, нормаль и вершины треугольника, что без BVH', (x, y) => {
+    const plain = densePlate();
+    const accelerated = densePlate();
+    plain.updateMatrixWorld();
+    accelerated.updateMatrixWorld();
+    enableBvh(accelerated);
+    const ndc = new THREE.Vector2(x, y);
+
+    const a = pick(camera, ndc, [plain])!;
+    const b = pick(camera, ndc, [accelerated])!;
+
+    expect(round(b.point)).toEqual(round(a.point));
+    expect(round(b.normal)).toEqual(round(a.normal));
+    expect([...b.vertices].sort()).toEqual([...a.vertices].sort());
+  });
+
+  test('BVH + срез z > 0: всё равно изнанка задней грани (0,0,−60) — нужен не только первый hit', () => {
+    const cam = new THREE.PerspectiveCamera(45, 1, 1, 10_000);
+    cam.position.set(0, 0, 1000);
+    cam.lookAt(0, 0, 0);
+    cam.updateMatrixWorld();
+    const plate = densePlate();
+    plate.updateMatrixWorld();
+    enableBvh(plate);
+
+    const hit = pick(cam, new THREE.Vector2(0, 0), [plate], new THREE.Plane(new THREE.Vector3(0, 0, -1), 0))!;
+
+    expect(round(hit.point)).toEqual([0, 0, -60]);
   });
 });

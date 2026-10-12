@@ -1,6 +1,6 @@
 # Карта кода
 
-Где что лежит и кто кого вызывает. Состояние на шаг 10.
+Где что лежит и кто кого вызывает. Состояние на шаг 11.
 
 ## Файлы
 
@@ -23,6 +23,7 @@ src/
     picking.ts              pixelToNdc (общая), pick: луч → точка/нормаль/треугольник/барицентрия; пропуск отрезанного; замер
     selection.ts            Selection: маркер постоянного экранного размера + подсветка треугольника
     probes.ts               ProbeMarkers: цветные маркеры зондов (цвет = цвет кривой на графике)
+    bvh.ts                  enableBvh / disableBvh: three-mesh-bvh локально на меши детали (indirect)
     playback.ts             playbackStep (шаг по времени), Player: проигрывание внутри рендера по требованию
     field-view.ts           FieldView: поле на детали (атрибут aScalar + ShaderMaterial), шаг, палитра, диапазон,
                             срез setClip (uniform + clippingPlanes), sample() — поле в любых точках,
@@ -50,6 +51,7 @@ src/
   *.test.ts                 тесты рядом с модулем (Vitest): scale, cameras, zoom, model, loaders, picking, field, palette, section, cycle, playback, chart
 
 scripts/make-samples.mjs    генератор тестовых моделей
+scripts/bench-pick.mjs      замер picking: перебор против BVH, 32 тыс. – 2 млн треугольников
 samples/                    plate-cm-zup.stl (см, Z↑), plate-m.gltf (м, Y↑)
 docs/
   README.md                 журнал шагов
@@ -134,3 +136,7 @@ main.ts
 **Счётчики (шаг 10):** `onRender` → `showStats()` читает `renderer.info` (за последний `render()`),
 `viewer.lastFrameMs`, `viewer.busy`; через 250 мс после кадра — ещё раз, чтобы показать «в покое».
 «Пересобрать ×10» → 10 × (`applyOptions` + два rAF) → разница `info.memory.geometries`.
+
+**BVH (шаг 11):** `onModelChanged` → `enableBvh(model.world)` (если галочка) → `geometry.boundsTree`,
+`mesh.raycast = acceleratedRaycast`. `pick` ставит `firstHitOnly = !clip`. Пересборка детали делает
+новые геометрии — дерево строится заново.

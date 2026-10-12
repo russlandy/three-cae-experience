@@ -48,6 +48,10 @@ export function pick(
   clip?: THREE.Plane | null,
 ): PickResult | null {
   raycaster.setFromCamera(ndc, camera);
+  // firstHitOnly (three-mesh-bvh): дерево останавливается на ближайшем треугольнике — ещё быстрее.
+  // Но со срезом ближайший может оказаться в отрезанной части, и следующего уже не будет — тогда
+  // нужны все попадания. Без BVH флаг ни на что не влияет
+  raycaster.firstHitOnly = !clip;
   const hits = raycaster.intersectObjects(objects, true);
 
   const hit = clip ? hits.find((h) => clip.distanceToPoint(h.point) >= 0) : hits[0];
@@ -73,10 +77,24 @@ export function pick(
  * Среднее время одного пересечения луча, мс.
  * performance.now() в браузере огрублён (до 0.1 мс без cross-origin isolation — защита от Spectre),
  * а луч по маленькой детали занимает микросекунды. Одиночный замер дал бы 0 — меряем серию.
+ * Серия ограничена и по времени: перебором по 0.5 млн треугольников луч идёт ~13 мс, и 200 повторов
+ * заморозили бы интерфейс на 2.5 с. Медленному лучу хватит нескольких повторов — огрубление ему не мешает.
  */
-export function measurePickMs(camera: THREE.Camera, ndc: THREE.Vector2, objects: THREE.Object3D[], runs = 200): number {
+export function measurePickMs(
+  camera: THREE.Camera,
+  ndc: THREE.Vector2,
+  objects: THREE.Object3D[],
+  maxRuns = 200,
+  budgetMs = 50,
+): number {
   raycaster.setFromCamera(ndc, camera);
   const t0 = performance.now();
-  for (let i = 0; i < runs; i++) raycaster.intersectObjects(objects, true);
-  return (performance.now() - t0) / runs;
+  let runs = 0;
+  let elapsed = 0;
+  while (runs < maxRuns && (runs === 0 || elapsed < budgetMs)) {
+    raycaster.intersectObjects(objects, true);
+    runs++;
+    elapsed = performance.now() - t0;
+  }
+  return elapsed / runs;
 }
